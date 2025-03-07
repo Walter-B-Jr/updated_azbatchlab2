@@ -1,0 +1,115 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "resources": [
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2021-05-01",
+      "name": "azbatchvnettrnlab2",
+      "location": "eastus",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": ["10.0.0.0/16"]
+        },
+        "subnets": [
+          {
+            "name": "mySubnet",
+            "properties": {
+              "addressPrefix": "10.0.0.0/24",
+              "privateEndpointNetworkPolicies": "Disabled"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Batch/batchAccounts",
+      "apiVersion": "2024-02-01",
+      "name": "azurebatchtrnlab2",
+      "location": "eastus",
+      "properties": {
+        "poolAllocationMode": "BatchService",
+        "publicNetworkAccess": "Disabled"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', 'azbatchvnettrnlab2')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2024-06-01",
+      "name": "privatelink.batch.azure.com",
+      "location": "global",
+      "properties": {}
+    },
+    {
+      "type": "Microsoft.Network/privateEndpoints",
+      "apiVersion": "2021-05-01",
+      "name": "azbatchaccountpetrnlab2",
+      "location": "eastus",
+      "properties": {
+        "privateLinkServiceConnections": [
+          {
+            "name": "batchPrivateLink",
+            "properties": {
+              "privateLinkServiceId": "[resourceId('Microsoft.Batch/batchAccounts', 'azurebatchtrnlab2')]", 
+              "groupIds": ["batchAccount"]
+            }
+          }
+        ],
+        "subnet": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', 'azbatchvnettrnlab2', 'mySubnet')]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Batch/batchAccounts', 'azurebatchtrnlab2')]",
+        "[resourceId('Microsoft.Network/virtualNetworks', 'azbatchvnettrnlab2')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2024-06-01",
+      "name": "[concat('privatelink.batch.azure.com', '/', 'myVNetLink')]",
+      "location": "global",
+      "properties": {
+        "virtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', 'azbatchvnettrnlab2')]"
+        },
+        "registrationEnabled": false
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.batch.azure.com')]",
+        "[resourceId('Microsoft.Network/virtualNetworks', 'azbatchvnettrnlab2')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Batch/batchAccounts/pools",
+      "apiVersion": "2024-02-01",
+      "name": "[concat('azurebatchtrnlab2', '/', 'trnlab2pool')]",
+      "properties": {
+        "vmSize": "Standard_D2s_v3",
+        "deploymentConfiguration": {
+          "virtualMachineConfiguration": {
+            "imageReference": {
+              "publisher": "microsoftwindowsserver",
+              "offer": "windowsserver",
+              "sku": "2019-datacenter-smalldisk",
+              "version": "latest"
+            },
+            "nodeAgentSkuId": "batch.node.windows amd64"
+          }
+        },
+        "scaleSettings": {
+          "fixedScale": {
+            "targetDedicatedNodes": 1,
+            "targetLowPriorityNodes": 0
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Batch/batchAccounts', 'azurebatchtrnlab2')]",
+        "[resourceId('Microsoft.Network/privateEndpoints', 'azbatchaccountpetrnlab2')]"
+      ]
+    }
+  ]
+}
